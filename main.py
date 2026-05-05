@@ -484,7 +484,10 @@ class PDFGraphicsView(QGraphicsView):
         if self.parent_editor.current_tool and self.parent_editor.ghost_item:
             rect = self.parent_editor.ghost_item.boundingRect()
             scale = self.parent_editor.ghost_item.scale()
-            self.parent_editor.ghost_item.setPos(scene_pos.x() - (rect.width()*scale) / 2, scene_pos.y() - (rect.height()*scale) / 2)
+            if self.parent_editor.current_tool == "text":
+                self.parent_editor.ghost_item.setPos(scene_pos.x(), scene_pos.y())
+            else:
+                self.parent_editor.ghost_item.setPos(scene_pos.x() - (rect.width()*scale) / 2, scene_pos.y() - (rect.height()*scale) / 2)
 
     def wheelEvent(self, event: QWheelEvent):
         if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
@@ -544,6 +547,7 @@ class PDFEditor(QMainWindow):
         
         self.doc = None
         self.original_pdf_bytes = None
+        self.original_filename = None
         self.current_tool = None
         self.ghost_item = None
         self.last_scales = {}
@@ -917,12 +921,11 @@ class PDFEditor(QMainWindow):
             font = self.ghost_item.font()
             font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, val)
             self.ghost_item.setFont(font)
-            # Recenter ghost item
+            # Reposition ghost item (left-aligned for text)
             scale = self.ghost_item.scale()
             pos = self.view.mapFromGlobal(QCursor.pos())
             scene_pos = self.view.mapToScene(pos)
-            rect = self.ghost_item.boundingRect()
-            self.ghost_item.setPos(scene_pos.x() - (rect.width()*scale) / 2, scene_pos.y() - (rect.height()*scale) / 2)
+            self.ghost_item.setPos(scene_pos.x(), scene_pos.y())
             
         for item in self.scene.selectedItems():
             if isinstance(item, MovableTextItem):
@@ -934,6 +937,9 @@ class PDFEditor(QMainWindow):
     def open_pdf(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Open PDF", "", "PDF Files (*.pdf)")
         if file_path:
+            # Store the original filename (without extension) for save suggestions
+            self.original_filename = os.path.splitext(os.path.basename(file_path))[0]
+            
             with open(file_path, "rb") as f:
                 raw_bytes = f.read()
                 
@@ -1074,7 +1080,10 @@ class PDFEditor(QMainWindow):
             pos = self.view.mapFromGlobal(QCursor.pos())
             scene_pos = self.view.mapToScene(pos)
             rect = self.ghost_item.boundingRect()
-            self.ghost_item.setPos(scene_pos.x() - (rect.width()*scale) / 2, scene_pos.y() - (rect.height()*scale) / 2)
+            if tool_name == "text":
+                self.ghost_item.setPos(scene_pos.x(), scene_pos.y())
+            else:
+                self.ghost_item.setPos(scene_pos.x() - (rect.width()*scale) / 2, scene_pos.y() - (rect.height()*scale) / 2)
 
     def apply_tool(self, pos):
         tool = self.current_tool
@@ -1095,8 +1104,7 @@ class PDFEditor(QMainWindow):
                 item = MovableTextItem(text)
                 item.type_str = "text"
                 item.setScale(scale)
-                rect = item.boundingRect()
-                item.setPos(pos.x() - (rect.width()*scale) / 2, pos.y() - (rect.height()*scale) / 2)
+                item.setPos(pos.x(), pos.y())
                 self.scene.addItem(item)
                 added_item = item
         elif tool == "check":
@@ -1761,10 +1769,39 @@ class PDFEditor(QMainWindow):
             pixmap = QPixmap.fromImage(img)
             self.pdf_bg_items[page_num].setPixmap(pixmap)
 
+    def _build_save_filename(self):
+        """Build a suggested filename with suffixes based on modifications."""
+        base = self.original_filename if self.original_filename else ""
+        if not base:
+            return ""
+        
+        has_modifications = False
+        has_signature = False
+        
+        for item in self.scene.items():
+            if item in self.pdf_bg_items:
+                continue
+            if item == self.ghost_item:
+                continue
+            # Any user-added element counts as a modification
+            if isinstance(item, (MovableTextItem, MovablePixmapItem)):
+                has_modifications = True
+                if isinstance(item, MovablePixmapItem) and item.type_str == "signature":
+                    has_signature = True
+        
+        suffix = ""
+        if has_modifications:
+            suffix += "_M"
+        if has_signature:
+            suffix += "S"
+        
+        return base + suffix + ".pdf"
+
     def save_pdf(self):
         if not self.doc: return
         
-        file_path, _ = QFileDialog.getSaveFileName(self, "Save PDF", "", "PDF Files (*.pdf)")
+        suggested_name = self._build_save_filename()
+        file_path, _ = QFileDialog.getSaveFileName(self, "Save PDF", suggested_name, "PDF Files (*.pdf)")
         if not file_path: return
         
         # Open a fresh copy of the original PDF bytes so we don't permanently bake items into our live viewer
