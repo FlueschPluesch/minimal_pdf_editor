@@ -10,6 +10,8 @@ A fully standalone, cross-platform PDF Editor application written in Python and 
 - **Add custom text and checkmarks:** Insert multiline text, scalable "check" (✅) or "cross" (❌) markings.
 - **Media and Signatures:** Import local images (`.png`, `.jpg`, etc.) or define a persistent personal signature image to quickly sign multiple documents.
 - **Page Management:** Insert a blank page, delete an unwanted page, or import an entire secondary PDF document exactly where you need it.
+- **Highlight and Comment:** Mark important text with semi-transparent highlights and attach detailed side-comments. Comments are automatically linked to their highlights and stay synchronized during edits.
+- **Undo / Redo:** Full session history tracking for all actions. Revert or re-apply changes (moving, scaling, coloring, adding/deleting) with ease (up to 254 steps).
 - **True Vector Saves:** All modified elements and freehand drawings are written directly into the PDF backend as true vector drawings or native text objects using PyMuPDF – keeping your documents crisp and lightweight.
 - **Lossless Edits:** The application safely embeds your session state inside the PDF file itself. Whenever you re-open a modified PDF in the editor, all your added and edited elements remain fully selectable and interactive.
 
