@@ -76,7 +76,7 @@ class MovableTextItem(QGraphicsTextItem):
         self.setAcceptHoverEvents(True)
         self.setZValue(1.0)
         self.resizing = False
-        self.handle_size = 10
+        self.handle_size = 3
         font = QFont("Arial")
         font.setPointSizeF(float(font_size))
         font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, letter_spacing)
@@ -89,7 +89,7 @@ class MovableTextItem(QGraphicsTextItem):
 
     def get_handle_size(self):
         scale = self.scale() if self.scale() > 0 else 1.0
-        return 12.0 / scale
+        return 3.0 / scale
 
     def shape(self):
         path = QPainterPath()
@@ -272,7 +272,7 @@ class HighlightItem(QGraphicsRectItem):
         self.setAcceptHoverEvents(True)
         self.setZValue(0.5)   # above PDF background, below other elements
         self.resizing = False
-        self.handle_size = 10
+        self.handle_size = 3
         self.comment_text = ""
         self.comment_box = None
         self.comment_line = None
@@ -351,7 +351,7 @@ class HighlightItem(QGraphicsRectItem):
         return super().itemChange(change, value)
 
     def get_handle_size(self):
-        return 12.0
+        return 3.0
 
     def hoverMoveEvent(self, event):
         r = self.rect()
@@ -442,7 +442,7 @@ class MovablePixmapItem(QGraphicsPixmapItem):
                       QGraphicsPixmapItem.GraphicsItemFlag.ItemSendsGeometryChanges)
         self.setAcceptHoverEvents(True)
         self.resizing = False
-        self.handle_size = 10
+        self.handle_size = 3
         self.img_path = img_path
         self.type_str = item_type
         self.scale_x = 1.0
@@ -461,7 +461,7 @@ class MovablePixmapItem(QGraphicsPixmapItem):
     def get_handle_size(self):
         scale = max(self.scale_x, self.scale_y)
         if scale <= 0: scale = 1.0
-        return 12.0 / scale
+        return 3.0 / scale
 
     def get_handle_area(self, pos):
         rect = self.boundingRect()
@@ -677,7 +677,7 @@ class MovablePixmapItem(QGraphicsPixmapItem):
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRect(scaled_rect.adjusted(pen_width/2, pen_width/2, -pen_width/2, -pen_width/2))
             
-            h_size = 12.0
+            h_size = 3.0
             painter.setBrush(QColor(0, 120, 215))
             painter.setPen(Qt.PenStyle.NoPen)
             
@@ -834,8 +834,28 @@ class PDFGraphicsView(QGraphicsView):
         if event.key() == Qt.Key.Key_Delete:
             self.parent_editor.delete_selected()
             event.accept()
-        else:
-            super().keyPressEvent(event)
+            return
+
+        # Arrow keys: move selected element by 1px, otherwise scroll
+        if event.key() in (Qt.Key.Key_Left, Qt.Key.Key_Right, Qt.Key.Key_Up, Qt.Key.Key_Down):
+            selected = self.scene().selectedItems()
+            if selected:
+                self.parent_editor.save_to_history()
+                dx, dy = 0, 0
+                if event.key() == Qt.Key.Key_Left:
+                    dx = -1
+                elif event.key() == Qt.Key.Key_Right:
+                    dx = 1
+                elif event.key() == Qt.Key.Key_Up:
+                    dy = -1
+                elif event.key() == Qt.Key.Key_Down:
+                    dy = 1
+                for item in selected:
+                    item.moveBy(dx, dy)
+                event.accept()
+                return
+
+        super().keyPressEvent(event)
 
 class PDFEditor(QMainWindow):
     def __init__(self):

@@ -4,7 +4,7 @@
 echo "Updating build version..."
 if [ -f "version.json" ]; then
     # Use python to safely increment build number in JSON
-    python3 -c "import json; f=open('version.json','r+'); v=json.load(f); v['build_number']+=1; f.seek(0); json.dump(v,f); f.truncate(); print(f'New Build Number: {v[\"build_number\"]}')"
+    python3 -c "import json, datetime; f=open('version.json','r+'); v=json.load(f); v['build_number']+=1; v['year']=datetime.datetime.now().year; f.seek(0); json.dump(v,f); f.truncate(); print(f'New Build Number: {v[\"build_number\"]}')"
 else
     echo '{"build_number": 1, "year": 2026}' > version.json
     echo "Initialized version.json with Build Number 1"
@@ -54,6 +54,6 @@ PYINSTALLER_ARGS+=("--add-data" "version.json:.")
 PYINSTALLER_ARGS+=("--add-data" "icon.png:.")
 PYINSTALLER_ARGS+=("main.py")
 
-pyinstaller "${PYINSTALLER_ARGS[@]}"
+python3 -m PyInstaller "${PYINSTALLER_ARGS[@]}"
 
 echo "Build complete! You can find the executable in the 'dist' folder."

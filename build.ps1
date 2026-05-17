@@ -42,19 +42,19 @@ if (Test-Path ".\icon.png") {
 Remove-Item -Path "*.spec" -ErrorAction SilentlyContinue
 
 Write-Host "Building Minimal PDF Editor executable..."
-$pyinstaller = ".\venv\Scripts\pyinstaller.exe"
-$args = @("--noconfirm", "--onefile", "--windowed")
+$python = ".\venv\Scripts\python.exe"
+$buildArgs = @("-m", "PyInstaller", "--noconfirm", "--onefile", "--windowed")
 
 if (Test-Path ".\icon.ico") {
-    $args += "--icon", "icon.ico"
+    $buildArgs += "--icon", "icon.ico"
 }
 
-$args += "--name", "Minimal PDF Editor"
-$args += "--add-data", "version.json;."
-$args += "--add-data", "icon.png;."
-$args += ".\main.py"
+$buildArgs += "--name", "Minimal PDF Editor"
+$buildArgs += "--add-data", "version.json;."
+$buildArgs += "--add-data", "icon.png;."
+$buildArgs += ".\main.py"
 
-& $pyinstaller $args
+& $python $buildArgs
 
 # Update github_export folder with latest source and project files
 Write-Host "Updating github_export folder..."
