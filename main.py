@@ -2534,6 +2534,12 @@ Categories=Office;Graphics;
         if not base:
             return ""
         
+        # Clean up any previously appended editor suffixes from the base name
+        if base.endswith("_MS"):
+            base = base[:-3]
+        elif base.endswith("_M"):
+            base = base[:-2]
+        
         has_modifications = False
         has_signature = False
         
