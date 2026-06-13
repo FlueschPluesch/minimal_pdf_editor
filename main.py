@@ -97,6 +97,13 @@ class MovableTextItem(QGraphicsTextItem):
         return path
 
     def hoverMoveEvent(self, event):
+        editor = None
+        if self.scene() and self.scene().views():
+            editor = self.scene().views()[0].parent_editor
+        if editor and editor.current_tool is not None:
+            super().hoverMoveEvent(event)
+            return
+
         rect = self.boundingRect()
         h_size = self.get_handle_size()
         if event.pos().x() >= rect.right() - h_size and event.pos().y() >= rect.bottom() - h_size:
@@ -354,6 +361,13 @@ class HighlightItem(QGraphicsRectItem):
         return 3.0
 
     def hoverMoveEvent(self, event):
+        editor = None
+        if self.scene() and self.scene().views():
+            editor = self.scene().views()[0].parent_editor
+        if editor and editor.current_tool is not None:
+            super().hoverMoveEvent(event)
+            return
+
         r = self.rect()
         h = self.get_handle_size()
         pos = event.pos()
@@ -562,6 +576,13 @@ class MovablePixmapItem(QGraphicsPixmapItem):
         return path
 
     def hoverMoveEvent(self, event):
+        editor = None
+        if self.scene() and self.scene().views():
+            editor = self.scene().views()[0].parent_editor
+        if editor and editor.current_tool is not None:
+            super().hoverMoveEvent(event)
+            return
+
         area = self.get_handle_area(event.pos())
         if area == "corner":
             self.setCursor(Qt.CursorShape.SizeFDiagCursor)
@@ -831,6 +852,19 @@ class PDFGraphicsView(QGraphicsView):
         super().mouseReleaseEvent(event)
 
     def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Escape:
+            if self.parent_editor.current_tool:
+                self.parent_editor.current_tool = None
+                if self.parent_editor.ghost_item:
+                    self.scene().removeItem(self.parent_editor.ghost_item)
+                    self.parent_editor.ghost_item = None
+                if self.parent_editor.highlight_preview_item:
+                    self.scene().removeItem(self.parent_editor.highlight_preview_item)
+                    self.parent_editor.highlight_preview_item = None
+                self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
+                event.accept()
+                return
+
         if event.key() == Qt.Key.Key_Delete:
             self.parent_editor.delete_selected()
             event.accept()
@@ -983,6 +1017,11 @@ class PDFEditor(QMainWindow):
         self.btn_save.setShortcut("Ctrl+S")
         self.btn_save.clicked.connect(self.save_pdf)
         self.toolbar1.addWidget(self.btn_save)
+        
+        self.btn_print = QPushButton("🖨️ Print PDF")
+        self.btn_print.setShortcut("Ctrl+P")
+        self.btn_print.clicked.connect(self.print_pdf)
+        self.toolbar1.addWidget(self.btn_print)
         
         self.toolbar1.addSeparator()
 
@@ -1317,8 +1356,18 @@ class PDFEditor(QMainWindow):
                 command = f'{app_path} "%1"'
 
             prog_id = "MinimalPDFEditor.AssocFile.PDF"
+            exe_name = os.path.basename(sys.executable) if getattr(sys, 'frozen', False) else "python.exe"
             
             try:
+                # Clean up legacy direct association that triggers Windows 10/11 UserChoice resets
+                try:
+                    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Classes\.pdf", 0, winreg.KEY_ALL_ACCESS) as key:
+                        val, _ = winreg.QueryValueEx(key, "")
+                        if val == prog_id:
+                            winreg.DeleteValue(key, "")
+                except Exception:
+                    pass
+
                 # 1. Register ProgID
                 with winreg.CreateKey(winreg.HKEY_CURRENT_USER, rf"Software\Classes\{prog_id}") as key:
                     winreg.SetValue(key, "", winreg.REG_SZ, "PDF Document")
@@ -1327,17 +1376,23 @@ class PDFEditor(QMainWindow):
                     with winreg.CreateKey(key, r"shell\open\command") as cmd_key:
                         winreg.SetValue(cmd_key, "", winreg.REG_SZ, command)
                 
-                # 2. Associate .pdf extension
-                with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\Classes\.pdf") as key:
-                    winreg.SetValue(key, "", winreg.REG_SZ, prog_id)
+                # 2. Register OpenWithProgids under .pdf to avoid hash-check issues
+                with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\Classes\.pdf\OpenWithProgids") as key:
+                    winreg.SetValueEx(key, prog_id, 0, winreg.REG_SZ, "")
                     
                 # 3. Register as an Application
-                exe_name = os.path.basename(sys.executable)
                 with winreg.CreateKey(winreg.HKEY_CURRENT_USER, rf"Software\Classes\Applications\{exe_name}\shell\open\command") as key:
                     winreg.SetValue(key, "", winreg.REG_SZ, command)
                     
-                QMessageBox.information(self, "Success", "Minimal PDF Editor has been set as the default PDF handler in your user profile.\n\nNote: Windows might still ask you to confirm this choice the next time you open a PDF.")
-                logger.info("Successfully registered as default PDF handler on Windows")
+                # 4. Add to Explorer FileExts OpenWithProgids list
+                with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.pdf\OpenWithProgids") as key:
+                    winreg.SetValueEx(key, prog_id, 0, winreg.REG_SZ, "")
+                    
+                QMessageBox.information(self, "Success", 
+                    "Minimal PDF Editor has been registered in the Windows registry as a valid PDF handler.\n\n"
+                    "Windows 10/11 will no longer block or reset the association. You can now use 'Open with' -> 'Choose another app', "
+                    "select 'Minimal PDF Editor', and choose 'Always' to set it as default.")
+                logger.info("Successfully registered as a PDF handler on Windows")
             except Exception as e:
                 logger.error(f"Failed to set as default PDF editor on Windows: {e}")
                 QMessageBox.critical(self, "Error", f"Failed to set as default PDF editor: {e}")
@@ -1706,6 +1761,7 @@ Categories=Office;Graphics;
 
         if self.ghost_item:
             self.ghost_item.setOpacity(0.5)
+            self.ghost_item.setZValue(10000.0)  # Make sure the preview item is always drawn on top of all other graphics items
             scale = self.last_scales.get(tool_name, 1.0)
             self.ghost_item.setScale(scale)
             self.scene.addItem(self.ghost_item)
@@ -2055,9 +2111,25 @@ Categories=Office;Graphics;
         self.set_tool("signature")
 
     def on_scroll_changed(self):
+        self.update_page_info()
+
+    def update_page_info(self):
         if not self.doc or not self.page_rects:
+            self.lbl_page_info.setText(" Page: - / - ")
             return
         
+        view_center = self.view.viewport().rect().center()
+        scene_y = self.view.mapToScene(view_center).y()
+        
+        current_page = 1
+        for rect in self.page_rects:
+            if rect['start_y'] <= scene_y <= (rect['start_y'] + rect['height']):
+                current_page = rect['page_num'] + 1
+                break
+                
+        total_pages = len(self.doc)
+        self.lbl_page_info.setText(f" Page: {current_page} / {total_pages} ")
+
     def bring_to_front(self, item):
         """Increase Z-value of the item and its children within their respective layers."""
         if isinstance(item, HighlightItem):
@@ -2072,18 +2144,7 @@ Categories=Office;Graphics;
             self.z_general += 0.01
             item.setZValue(self.z_general)
         
-        # Determine the y-coordinate at the center of the view
-        view_center = self.view.viewport().rect().center()
-        scene_y = self.view.mapToScene(view_center).y()
-        
-        current_page = 1
-        for rect in self.page_rects:
-            if rect['start_y'] <= scene_y <= (rect['start_y'] + rect['height']):
-                current_page = rect['page_num'] + 1
-                break
-                
-        total_pages = len(self.doc)
-        self.lbl_page_info.setText(f" Page: {current_page} / {total_pages} ")
+        self.update_page_info()
 
     def delete_current_page(self):
         if not self.doc or len(self.doc) <= 1:
@@ -2866,12 +2927,92 @@ Categories=Office;Graphics;
         out_doc.embfile_add("editor_state", state_json.encode("utf-8"), filename="state.json")
         out_doc.save(file_path)
 
+    def print_pdf(self):
+        if not self.doc:
+            return
+            
+        from PyQt6.QtPrintSupport import QPrinter, QPrintDialog
+        from PyQt6.QtGui import QPainter
+        
+        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+        if self.original_filename:
+            printer.setDocName(self.original_filename)
+        else:
+            printer.setDocName("Document")
+            
+        dialog = QPrintDialog(printer, self)
+        if dialog.exec() == QPrintDialog.DialogCode.Accepted:
+            # Save selection
+            selected_items = self.scene.selectedItems()
+            self.scene.clearSelection()
+            
+            # Save tool state & ghost visibility
+            ghost_visible = False
+            preview_visible = False
+            if self.ghost_item:
+                ghost_visible = self.ghost_item.isVisible()
+                self.ghost_item.setVisible(False)
+            if self.highlight_preview_item:
+                preview_visible = self.highlight_preview_item.isVisible()
+                self.highlight_preview_item.setVisible(False)
+                
+            # Temporarily hide floating menu
+            if hasattr(self, 'floating_menu'):
+                self.floating_menu.hide()
+                
+            painter = QPainter(printer)
+            
+            for i, p_rect in enumerate(self.page_rects):
+                if i > 0:
+                    printer.newPage()
+                
+                # Original PDF page size in points
+                page = self.doc[p_rect['page_num']]
+                p_width = page.rect.width
+                p_height = page.rect.height
+                
+                # Rect in the QGraphicsScene corresponding to this page
+                scene_rect = QRectF(0, p_rect['start_y'], p_width * PDF_ZOOM, p_height * PDF_ZOOM)
+                
+                # Get printable area on the printer page in pixels at the printer's resolution
+                printer_rect = printer.pageLayout().paintRectPixels(printer.resolution())
+                
+                # Render the scene_rect onto the printer_rect
+                self.scene.render(painter, QRectF(printer_rect), scene_rect)
+                
+            painter.end()
+            
+            # Restore selection
+            for item in selected_items:
+                item.setSelected(True)
+                
+            # Restore ghost visibility
+            if self.ghost_item:
+                self.ghost_item.setVisible(ghost_visible)
+            if self.highlight_preview_item:
+                self.highlight_preview_item.setVisible(preview_visible)
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = PDFEditor()
+    window.showMaximized()
+    
     if len(sys.argv) > 1:
-        file_path = sys.argv[1]
+        # Strip potential wrapping quotes from the argument
+        file_path = sys.argv[1].strip('\'"')
+        file_path = os.path.abspath(file_path)
+        
+        # If the path doesn't exist directly, check if it was split by spaces without quotes
+        if not os.path.exists(file_path):
+            joined_path = " ".join(sys.argv[1:]).strip('\'"')
+            joined_path = os.path.abspath(joined_path)
+            if os.path.exists(joined_path):
+                file_path = joined_path
+        
+        logger.info(f"Startup argument path: {file_path}")
         if os.path.exists(file_path) and file_path.lower().endswith(".pdf"):
             window.open_pdf_file(file_path)
-    window.showMaximized()
+        else:
+            logger.warning(f"Startup file path not found or invalid: {file_path}")
+            
     sys.exit(app.exec())
