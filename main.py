@@ -2,6 +2,7 @@ import sys
 import os
 import platform
 import subprocess
+import re
 try:
     import winreg
 except ImportError:
@@ -901,6 +902,9 @@ class PDFEditor(QMainWindow):
         
         self.settings = QSettings("MyCompany", "PDFEditorApp")
         
+        # Checkbox "Add date to filename" (default: True)
+        self.add_date_to_filename = self.settings.value("add_date_to_filename", True, type=bool)
+        
         # Load build version info
         self.build_info = {"build_number": "Unknown", "year": "2026"}
         try:
@@ -1286,12 +1290,22 @@ class PDFEditor(QMainWindow):
         
         menu.addSeparator()
         
+        prefix = "✅ " if self.add_date_to_filename else "⬜ "
+        add_date_action = menu.addAction(f"{prefix}Add date to filename")
+        add_date_action.triggered.connect(self.toggle_add_date_to_filename)
+        
+        menu.addSeparator()
+        
         default_action = menu.addAction("📌 Set as default PDF editor")
         default_action.triggered.connect(self.set_as_default_pdf_editor)
         
         # Position menu below the settings button
         btn_pos = self.btn_settings.mapToGlobal(self.btn_settings.rect().bottomLeft())
         menu.exec(btn_pos)
+
+    def toggle_add_date_to_filename(self):
+        self.add_date_to_filename = not self.add_date_to_filename
+        self.settings.setValue("add_date_to_filename", self.add_date_to_filename)
 
     def show_log_dialog(self):
         dialog = QDialog(self)
@@ -2600,6 +2614,15 @@ Categories=Office;Graphics;
             base = base[:-3]
         elif base.endswith("_M"):
             base = base[:-2]
+        
+        if self.add_date_to_filename:
+            # Check if base already starts with a date pattern (e.g. dd_mm_yyyy, dd-mm-yy, etc.)
+            # Match 2-part or 3-part dates at the start with day/month/year or day/month
+            has_date = re.match(r'^\d{1,2}[_.\-/]\d{1,2}(?:[_.\-/]\d{2,4})?', base) is not None
+            if not has_date:
+                from datetime import datetime
+                date_prefix = datetime.now().strftime("%d_%m_%Y")
+                base = f"{date_prefix}_{base}"
         
         has_modifications = False
         has_signature = False
