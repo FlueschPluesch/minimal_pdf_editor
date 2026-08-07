@@ -1,0 +1,37 @@
+# Environments & Virtual Envs
+venv/
+env/
+ENV/
+.env
+.venv
+
+# Builds & Executables
+build/
+dist/
+*.spec
+*.ico
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+
+# Logs, Temp & User Data
+*.log
+log.txt
+state.json
+signature.png
+*.pdf
+scratch/
+
+# IDE & Editor Configs
+.vscode/
+.idea/
+.vs/
+*.swp
+*~
+
+# OS Generated Files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
