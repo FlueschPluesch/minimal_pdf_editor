@@ -5,10 +5,12 @@ A fully standalone, cross-platform PDF Editor application written in Python and 
 ## Features
 
 - **Edit existing content:** Select, modify, move, scale, and rotate existing text, images, and vector graphics extracted straight from the source PDF.
-- **Draw primitives:** Add and configure straight lines, rectangles, circles, and triangles with customized border widths (Line Width) and background colors (Fill: ON/OFF).
-- **Freehand brush tool:** Paint directly onto your documents using a completely customizable vector brush that supports later scaling, coloring, and rotating.
-- **Add custom text and checkmarks:** Insert multiline text, scalable "check" (✅) or "cross" (❌) markings.
-- **Media and Signatures:** Import local images (`.png`, `.jpg`, etc.) or define a persistent personal signature image to quickly sign multiple documents.
+- **Typography & Font Selection:** Choose from popular Monospace fonts (Courier New [default], Consolas, Monaco, Liberation Mono, Fira Code) and Standard fonts (Arial, Helvetica, Segoe UI, Times New Roman, Georgia, Verdana) with live visual typography previews directly in the dropdown menu.
+- **Rich Text Formatting (Bold, Italic, Underline):** Apply **Bold** (**B**), *Italic* (*I*), and <u>Underline</u> (<u>U</u>) styles to new or selected text elements with instant visual feedback and 1:1 native PDF export.
+- **Element Duplication (Copy):** Instantly clone any focused item (text, shapes, highlights, images, signatures, freehand drawings) right at your mouse cursor position using the `📋` (Copy) button in the floating context menu.
+- **Draw primitives & brush:** Add and configure straight lines, rectangles, circles, and triangles with customized border widths (Line Width) and background colors (Fill: ON/OFF), or paint using a customizable vector brush.
+- **Add custom text and checkmarks:** Insert multiline text with letter spacing controls (0.5 steps), as well as scalable "check" (✅) or "cross" (❌) markings.
+- **Media and Signatures:** Import local images (`.png`, `.jpg`, etc.) or define a persistent personal signature image (saved to user AppData) to quickly sign multiple documents.
 - **Page Management:** Insert a blank page, delete an unwanted page, or import an entire secondary PDF document exactly where you need it.
 - **Highlight and Comment:** Mark important text with semi-transparent highlights and attach detailed side-comments. Comments are automatically linked to their highlights and stay synchronized during edits.
 - **Undo / Redo:** Full session history tracking for all actions. Revert or re-apply changes (moving, scaling, coloring, adding/deleting) with ease (up to 254 steps).
