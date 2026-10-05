@@ -28,9 +28,9 @@ if (!(Test-Path -Path "venv")) {
 }
 
 # Install or upgrade dependencies
-Write-Host "Installing/Upgrading dependencies..."
+Write-Host "Installing/Upgrading dependencies (including latest PyMuPDF)..."
 .\venv\Scripts\python.exe -m pip install --upgrade pip --quiet
-.\venv\Scripts\python.exe -m pip install PyQt6 PyMuPDF pyinstaller Pillow --quiet
+.\venv\Scripts\python.exe -m pip install --upgrade -r requirements.txt --quiet
 
 # Convert icon.png to icon.ico if it exists (high-quality multi-resolution)
 if (Test-Path ".\icon.png") {

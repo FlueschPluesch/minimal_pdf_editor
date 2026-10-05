@@ -28,9 +28,9 @@ fi
 source venv/bin/activate
 
 # Install or upgrade dependencies
-echo "Installing/Upgrading dependencies..."
+echo "Installing/Upgrading dependencies (including latest PyMuPDF)..."
 python3 -m pip install --upgrade pip --quiet
-python3 -m pip install PyQt6 PyMuPDF pyinstaller Pillow --quiet
+python3 -m pip install --upgrade -r requirements.txt --quiet
 
 # Convert icon.png to icon.ico if it exists (high-quality multi-resolution)
 if [ -f "icon.png" ]; then

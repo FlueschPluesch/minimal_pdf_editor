@@ -1486,13 +1486,15 @@ class PDFEditor(QMainWindow):
     def show_about_dialog(self):
         build_num = self.build_info.get("build_number", "Unknown")
         build_year = self.build_info.get("year", "2026")
+        pymupdf_version = getattr(fitz, "__version__", "Unknown")
         
         QMessageBox.about(self, "About Minimal PDF Editor",
             f"<h3>Minimal PDF Editor</h3>"
             f"<p>A powerful and easy-to-use PDF editor built with Python and PyQt6.</p>"
             f"<p><b>Author:</b> FlueschPluesch<br>"
             f"<b>Build Number:</b> {build_num}<br>"
-            f"<b>Build Year:</b> {build_year}</p>"
+            f"<b>Build Year:</b> {build_year}<br>"
+            f"<b>PDF Engine (PyMuPDF):</b> v{pymupdf_version}</p>"
             f"<p>&copy; {build_year} FlueschPluesch</p>"
         )
 
