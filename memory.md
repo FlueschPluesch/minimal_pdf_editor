@@ -54,6 +54,7 @@ Eine grafische Desktop-Anwendung (GUI) zum Bearbeiten von PDF-Dateien.
 - **Text Spacing Input Feld (Neu):** Breite des Spacing-Eingabefelds auf 90px erhöht, damit Zahlen nicht abgeschnitten werden. Die Schrittweite für Pfeil-Buttons sowie Pfeiltasten (Up/Down) auf 0,5 angepasst (vorher 1,0).
 - **Schriftarten-Vorschau & Dropdown (Neu):** Jede Schriftart im Dropdown-Menü wird in ihrer jeweiligen Typografie dargestellt (`FontRole`), inklusive Echtzeit-Vorschau der gewählten Schrift im geschlossenen Dropdown-Feld.
 - **Element Duplizieren / Kopieren (Neu):** Ein `📋`-Copy-Icon im schwebenden Kontextmenü ermöglicht das sofortige Klonen jedes ausgewählten Elements (Text, Formen, Markierungen, Bilder, Stempel, Zeichnungen) an die aktuelle Mausposition. Das neue Element wird sofort zentriert unter dem Mauszeiger platziert und direkt fokussiert.
+- **Insert PDF Default-Position (Neu):** Beim Einfügen eines PDFs via `Insert PDF` fragt der Dialog standardmäßig nicht mehr nach Seite 1, sondern schlägt als Default immer die letzte Seite (`total_pages`) vor, da das Anhängen weiterer Seiten an das Dokument der häufigste Anwendungsfall ist.
 - `memory.md` wird gepflegt.
 
 

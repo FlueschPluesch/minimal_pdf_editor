@@ -2549,16 +2549,7 @@ Categories=Office;Graphics;
         self.settings.setValue("last_pdf_dir", os.path.dirname(file_path))
             
         total_pages = len(self.doc)
-        view_center = self.view.viewport().rect().center()
-        scene_y = self.view.mapToScene(view_center).y()
-        
-        current_page = 0
-        for rect in self.page_rects:
-            if rect['start_y'] <= scene_y <= (rect['start_y'] + rect['height']):
-                current_page = rect['page_num']
-                break
-                
-        insert_after, ok = QInputDialog.getInt(self, "Insert PDF", "Insert after page number (0 for beginning):", current_page + 1, 0, total_pages)
+        insert_after, ok = QInputDialog.getInt(self, "Insert PDF", "Insert after page number (0 for beginning):", total_pages, 0, total_pages)
         
         if ok:
             self.save_to_history()
