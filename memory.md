@@ -55,6 +55,7 @@ Eine grafische Desktop-Anwendung (GUI) zum Bearbeiten von PDF-Dateien.
 - **Schriftarten-Vorschau & Dropdown (Neu):** Jede Schriftart im Dropdown-Menü wird in ihrer jeweiligen Typografie dargestellt (`FontRole`), inklusive Echtzeit-Vorschau der gewählten Schrift im geschlossenen Dropdown-Feld.
 - **Element Duplizieren / Kopieren (Neu):** Ein `📋`-Copy-Icon im schwebenden Kontextmenü ermöglicht das sofortige Klonen jedes ausgewählten Elements (Text, Formen, Markierungen, Bilder, Stempel, Zeichnungen) an die aktuelle Mausposition. Das neue Element wird sofort zentriert unter dem Mauszeiger platziert und direkt fokussiert.
 - **Insert PDF Default-Position (Neu):** Beim Einfügen eines PDFs via `Insert PDF` fragt der Dialog standardmäßig nicht mehr nach Seite 1, sondern schlägt als Default immer die letzte Seite (`total_pages`) vor, da das Anhängen weiterer Seiten an das Dokument der häufigste Anwendungsfall ist.
+- **Release V2.4.1:** Als GitHub Release veröffentlicht inklusive hochgeladener `Minimal_PDF_Editor.exe` (Build #57).
 - `memory.md` wird gepflegt.
 
 
