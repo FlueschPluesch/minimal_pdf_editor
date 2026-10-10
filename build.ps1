@@ -38,6 +38,14 @@ if (Test-Path ".\icon.png") {
     .\venv\Scripts\python.exe -c "from PIL import Image; img = Image.open('icon.png').convert('RGBA'); side = max(img.size); square = Image.new('RGBA', (side, side), (0,0,0,0)); square.paste(img, ((side - img.width)//2, (side - img.height)//2)); square.save('icon.ico', sizes=[(16,16), (32,32), (48,48), (64,64), (128,128), (256,256)])"
 }
 
+# Close any running instance of the editor before building so PyInstaller can write to dist
+$running = Get-Process -Name "Minimal_PDF_Editor" -ErrorAction SilentlyContinue
+if ($running) {
+    Write-Host "Closing running instance of Minimal_PDF_Editor..."
+    $running | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 1
+}
+
 # Clean up old spec files to ensure a fresh build with the new icon settings
 Remove-Item -Path "*.spec" -ErrorAction SilentlyContinue
 

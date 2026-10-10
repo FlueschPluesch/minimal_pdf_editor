@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QGraphicsView, QGraphics
                              QVBoxLayout, QHBoxLayout,
                              QWidget, QPushButton, QFileDialog, QToolBar,
                              QInputDialog, QMessageBox, QStyle, QColorDialog, QDoubleSpinBox, QLabel, QComboBox,
-                             QMenu, QSizePolicy, QPlainTextEdit, QDialog)
+                             QMenu, QSizePolicy, QPlainTextEdit, QDialog, QLineEdit)
 
 def get_safe_log_path():
     try:
@@ -50,8 +50,8 @@ def global_exception_handler(exc_type, exc_value, exc_traceback):
 
 sys.excepthook = global_exception_handler
 logger.info("Application started")
-from PyQt6.QtGui import QImage, QPixmap, QFont, QTransform, QWheelEvent, QPen, QColor, QPainter, QCursor, QIcon, QPolygonF, QFontMetricsF, QPainterPath
-from PyQt6.QtCore import Qt, QSettings, QRectF, QByteArray, QBuffer, QIODevice, QPointF, QStandardPaths
+from PyQt6.QtGui import QImage, QPixmap, QFont, QTransform, QWheelEvent, QPen, QColor, QPainter, QCursor, QIcon, QPolygonF, QFontMetricsF, QPainterPath, QShortcut, QKeySequence
+from PyQt6.QtCore import Qt, QSettings, QRectF, QByteArray, QBuffer, QIODevice, QPointF, QStandardPaths, QSize
 import os
 import json
 import base64
@@ -787,6 +787,99 @@ class FloatingMenu(QWidget):
         self.adjustSize()
         self.show()
 
+def create_arrow_icon(direction, color='#cccccc', disabled_color='#555555', active_color='#ffffff', size=16):
+    path = QPainterPath()
+    if direction == 'left':
+        path.moveTo(13, 8)
+        path.lineTo(3.5, 8)
+        path.moveTo(7.5, 4)
+        path.lineTo(3.5, 8)
+        path.lineTo(7.5, 12)
+    elif direction == 'right':
+        path.moveTo(3, 8)
+        path.lineTo(12.5, 8)
+        path.moveTo(8.5, 4)
+        path.lineTo(12.5, 8)
+        path.lineTo(8.5, 12)
+        
+    icon = QIcon()
+    for col, mode in [(color, QIcon.Mode.Normal), (disabled_color, QIcon.Mode.Disabled), (active_color, QIcon.Mode.Active)]:
+        pix = QPixmap(size, size)
+        pix.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pix)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pen = QPen(QColor(col), 2.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+        p.setPen(pen)
+        p.drawPath(path)
+        p.end()
+        icon.addPixmap(pix, mode, QIcon.State.Off)
+    return icon
+
+class SearchHighlightItem(QGraphicsRectItem):
+    def __init__(self, rect, is_active=False):
+        super().__init__(rect)
+        self.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+        self.setAcceptHoverEvents(False)
+        self.setFlags(QGraphicsRectItem.GraphicsItemFlag(0))
+        self.is_active = is_active
+        self.update_style()
+
+    def set_active(self, is_active):
+        if self.is_active != is_active:
+            self.is_active = is_active
+            self.update_style()
+            self.update()
+
+    def update_style(self):
+        if self.is_active:
+            self.setZValue(6.0)
+            self._fill_color = QColor(255, 140, 0, 190)
+            self._border_color = QColor(230, 70, 0, 255)
+            self._border_width = 2
+        else:
+            self.setZValue(5.0)
+            self._fill_color = QColor(255, 235, 59, 130)
+            self._border_color = QColor(230, 180, 0, 180)
+            self._border_width = 1
+
+    def paint(self, painter, option, widget=None):
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pen = QPen(self._border_color, self._border_width)
+        pen.setCosmetic(True)
+        painter.setPen(pen)
+        painter.setBrush(self._fill_color)
+        painter.drawRoundedRect(self.rect(), 2.0, 2.0)
+        painter.restore()
+
+
+class SearchLineEdit(QLineEdit):
+    def __init__(self, parent_editor=None):
+        super().__init__()
+        self.parent_editor = parent_editor
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Escape:
+            self.clear()
+            self.clearFocus()
+            if self.parent_editor and hasattr(self.parent_editor, 'view'):
+                self.parent_editor.view.setFocus()
+            event.accept()
+            return
+        elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+                if self.parent_editor:
+                    self.parent_editor.search_prev()
+                event.accept()
+                return
+            else:
+                if self.parent_editor:
+                    self.parent_editor.search_next()
+                event.accept()
+                return
+        super().keyPressEvent(event)
+
+
 class PDFGraphicsView(QGraphicsView):
     def __init__(self, scene, parent=None):
         super().__init__(scene, parent)
@@ -879,6 +972,10 @@ class PDFGraphicsView(QGraphicsView):
                 self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
                 event.accept()
                 return
+            elif getattr(self.parent_editor, 'search_matches', None):
+                self.parent_editor.search_input.clear()
+                event.accept()
+                return
 
         if event.key() == Qt.Key.Key_Delete:
             self.parent_editor.delete_selected()
@@ -940,6 +1037,11 @@ class PDFEditor(QMainWindow):
         self.highlight_preview_item = None
         self.mark_color = QColor(Qt.GlobalColor.black)
         self.shape_filled = False
+
+        # Search state
+        self.search_matches = []
+        self.current_search_index = -1
+        self.search_highlight_items = []
         
         # Undo/Redo history
         self.undo_stack = []
@@ -1034,10 +1136,30 @@ class PDFEditor(QMainWindow):
                 border-color: #007acc;
                 color: #ffffff;
             }
+            QPushButton:disabled {
+                background-color: #2a2a2a;
+                border-color: #333333;
+                color: #666666;
+            }
             QToolBar::separator {
                 width: 2px;
                 background-color: #3e3e42;
                 margin: 0 8px;
+            }
+            QLineEdit {
+                background-color: #333333;
+                border: 1px solid #3e3e42;
+                border-radius: 6px;
+                padding: 4px 8px;
+                color: #ffffff;
+                font-size: 13px;
+            }
+            QLineEdit:hover {
+                border-color: #555555;
+            }
+            QLineEdit:focus {
+                border: 1px solid #007acc;
+                background-color: #2a2d2e;
             }
             QComboBox {
                 background-color: #333333;
@@ -1132,10 +1254,53 @@ class PDFEditor(QMainWindow):
         self.btn_zoom_reset.clicked.connect(self.reset_zoom)
         self.toolbar1.addWidget(self.btn_zoom_reset)
 
-        # Spacer to push settings to the right
+        # Spacer to push search and settings to the right
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.toolbar1.addWidget(spacer)
+
+        # Divider before search
+        self.toolbar1.addSeparator()
+
+        # Search field
+        self.search_input = SearchLineEdit(self)
+        self.search_input.setPlaceholderText("🔍 Find in PDF...")
+        self.search_input.setToolTip("Search in PDF (Ctrl+F)")
+        self.search_input.setFixedWidth(160)
+        self.search_input.setFixedHeight(28)
+        self.search_input.setClearButtonEnabled(True)
+        self.search_input.textChanged.connect(self.on_search_text_changed)
+        self.toolbar1.addWidget(self.search_input)
+
+        # Match count label
+        self.lbl_search_count = QLabel("0 / 0")
+        self.lbl_search_count.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_search_count.setStyleSheet("color: #888888; font-weight: bold; margin-left: 4px; margin-right: 4px;")
+        self.lbl_search_count.setMinimumWidth(45)
+        self.toolbar1.addWidget(self.lbl_search_count)
+
+        # Previous match button
+        self.btn_search_prev = QPushButton()
+        self.btn_search_prev.setIcon(create_arrow_icon('left'))
+        self.btn_search_prev.setIconSize(QSize(16, 16))
+        self.btn_search_prev.setToolTip("Previous match (Shift+Enter / Shift+F3)")
+        self.btn_search_prev.setFixedSize(30, 28)
+        self.btn_search_prev.setEnabled(False)
+        self.btn_search_prev.clicked.connect(self.search_prev)
+        self.toolbar1.addWidget(self.btn_search_prev)
+
+        # Next match button
+        self.btn_search_next = QPushButton()
+        self.btn_search_next.setIcon(create_arrow_icon('right'))
+        self.btn_search_next.setIconSize(QSize(16, 16))
+        self.btn_search_next.setToolTip("Next match (Enter / F3)")
+        self.btn_search_next.setFixedSize(30, 28)
+        self.btn_search_next.setEnabled(False)
+        self.btn_search_next.clicked.connect(self.search_next)
+        self.toolbar1.addWidget(self.btn_search_next)
+
+        # Divider before settings
+        self.toolbar1.addSeparator()
 
         self.btn_settings = QPushButton("⚙️")
         self.btn_settings.setToolTip("Settings")
@@ -1367,6 +1532,14 @@ class PDFEditor(QMainWindow):
         self.apply_zoom()
         
         self.update_undo_redo_buttons()
+
+        # Search shortcuts
+        self.shortcut_find = QShortcut(QKeySequence("Ctrl+F"), self)
+        self.shortcut_find.activated.connect(self.focus_search)
+        self.shortcut_find_next = QShortcut(QKeySequence("F3"), self)
+        self.shortcut_find_next.activated.connect(self.search_next)
+        self.shortcut_find_prev = QShortcut(QKeySequence("Shift+F3"), self)
+        self.shortcut_find_prev.activated.connect(self.search_prev)
         
         # Check if we should ask to set as default (only on first start)
         from PyQt6.QtCore import QTimer
@@ -1978,6 +2151,9 @@ Categories=Office;Graphics;
         self.scene.clear()
         self.page_rects = []
         self.pdf_bg_items = []
+        self.search_highlight_items.clear()
+        self.search_matches.clear()
+        self.current_search_index = -1
         
         current_y = 0
         spacing = 20 # pixels between pages
@@ -2005,6 +2181,17 @@ Categories=Office;Graphics;
             
         self.scene.setSceneRect(self.scene.itemsBoundingRect())
         self.on_scroll_changed()
+
+        if hasattr(self, 'search_input') and self.search_input.text().strip():
+            self.perform_search()
+        else:
+            if hasattr(self, 'lbl_search_count'):
+                self.lbl_search_count.setText("0 / 0")
+                self.lbl_search_count.setStyleSheet("color: #888888; font-weight: bold; margin-left: 4px; margin-right: 4px;")
+            if hasattr(self, 'btn_search_prev'):
+                self.btn_search_prev.setEnabled(False)
+            if hasattr(self, 'btn_search_next'):
+                self.btn_search_next.setEnabled(False)
 
     def set_tool(self, tool_name):
         self.current_tool = tool_name
@@ -2662,6 +2849,7 @@ Categories=Office;Graphics;
             if item in self.pdf_bg_items: continue
             if item == self.ghost_item: continue
             if item == self.highlight_preview_item: continue
+            if isinstance(item, SearchHighlightItem): continue
 
             pos = item.scenePos()
             scale = item.scale()
@@ -2973,6 +3161,8 @@ Categories=Office;Graphics;
                 continue
             if item == self.ghost_item:
                 continue
+            if isinstance(item, SearchHighlightItem):
+                continue
             # Any user-added element counts as a modification
             if isinstance(item, (MovableTextItem, MovablePixmapItem)):
                 has_modifications = True
@@ -3062,7 +3252,7 @@ Categories=Office;Graphics;
         else:
             # Clear items but keep background
             for item in list(self.scene.items()):
-                if item not in self.pdf_bg_items and item != self.ghost_item and item != self.highlight_preview_item:
+                if item not in self.pdf_bg_items and item != self.ghost_item and item != self.highlight_preview_item and not isinstance(item, SearchHighlightItem):
                     if isinstance(item, HighlightItem):
                         if item.comment_box: self.scene.removeItem(item.comment_box)
                         if item.comment_line: self.scene.removeItem(item.comment_line)
@@ -3098,6 +3288,8 @@ Categories=Office;Graphics;
             if item == self.ghost_item:
                 continue
             if item is self.highlight_preview_item:
+                continue
+            if isinstance(item, SearchHighlightItem):
                 continue
                 
             pos = item.scenePos()
@@ -3359,6 +3551,11 @@ Categories=Office;Graphics;
             if self.highlight_preview_item:
                 preview_visible = self.highlight_preview_item.isVisible()
                 self.highlight_preview_item.setVisible(False)
+            search_items_to_restore = []
+            for item in getattr(self, 'search_highlight_items', []):
+                if item.isVisible():
+                    search_items_to_restore.append(item)
+                    item.setVisible(False)
                 
             # Temporarily hide floating menu
             if hasattr(self, 'floating_menu'):
@@ -3395,6 +3592,174 @@ Categories=Office;Graphics;
                 self.ghost_item.setVisible(ghost_visible)
             if self.highlight_preview_item:
                 self.highlight_preview_item.setVisible(preview_visible)
+            for item in search_items_to_restore:
+                item.setVisible(True)
+
+    # -------------------------------------------------------------
+    # Search Functionality
+    # -------------------------------------------------------------
+    def focus_search(self):
+        if hasattr(self, 'search_input'):
+            self.search_input.setFocus()
+            self.search_input.selectAll()
+
+    def clear_search(self):
+        for item in getattr(self, 'search_highlight_items', []):
+            try:
+                if item.scene() == self.scene:
+                    self.scene.removeItem(item)
+            except RuntimeError:
+                pass
+        self.search_highlight_items.clear()
+        self.search_matches.clear()
+        self.current_search_index = -1
+        if hasattr(self, 'lbl_search_count'):
+            self.lbl_search_count.setText("0 / 0")
+            self.lbl_search_count.setStyleSheet("color: #888888; font-weight: bold; margin-left: 4px; margin-right: 4px;")
+        if hasattr(self, 'btn_search_prev'):
+            self.btn_search_prev.setEnabled(False)
+        if hasattr(self, 'btn_search_next'):
+            self.btn_search_next.setEnabled(False)
+
+    def on_search_text_changed(self, text):
+        query = text.strip()
+        if not query:
+            self.clear_search()
+            return
+        self.perform_search(query)
+
+    def perform_search(self, query=None):
+        if query is None:
+            query = self.search_input.text().strip()
+        if not query:
+            self.clear_search()
+            return
+
+        # Clear previous highlights
+        for item in self.search_highlight_items:
+            try:
+                if item.scene() == self.scene:
+                    self.scene.removeItem(item)
+            except RuntimeError:
+                pass
+        self.search_highlight_items.clear()
+        self.search_matches.clear()
+        self.current_search_index = -1
+
+        if not self.doc or not self.page_rects:
+            self.lbl_search_count.setText("0 / 0")
+            self.lbl_search_count.setStyleSheet("color: #888888; font-weight: bold; margin-left: 4px; margin-right: 4px;")
+            self.btn_search_prev.setEnabled(False)
+            self.btn_search_next.setEnabled(False)
+            return
+
+        pad_x = 2.0
+        pad_y = 1.0
+
+        # 1. Search in base PDF document
+        for page_num in range(len(self.doc)):
+            if page_num >= len(self.page_rects):
+                continue
+            rect_info = self.page_rects[page_num]
+            start_y = rect_info['start_y']
+            page = self.doc[page_num]
+            try:
+                hits = page.search_for(query)
+            except Exception as e:
+                logger.error(f"Error searching text on page {page_num}: {e}")
+                hits = []
+
+            for hit_rect in hits:
+                sx = hit_rect.x0 * PDF_ZOOM
+                sy = start_y + hit_rect.y0 * PDF_ZOOM
+                sw = (hit_rect.x1 - hit_rect.x0) * PDF_ZOOM
+                sh = (hit_rect.y1 - hit_rect.y0) * PDF_ZOOM
+
+                scene_rect = QRectF(sx - pad_x, sy - pad_y, sw + 2 * pad_x, sh + 2 * pad_y)
+                highlight_item = SearchHighlightItem(scene_rect, is_active=False)
+                self.scene.addItem(highlight_item)
+                self.search_highlight_items.append(highlight_item)
+                self.search_matches.append({
+                    'page_num': page_num,
+                    'scene_rect': scene_rect,
+                    'item': highlight_item
+                })
+
+        # 2. Search in user-added text items (MovableTextItem)
+        query_lower = query.lower()
+        for item in self.scene.items():
+            if isinstance(item, MovableTextItem) and item.isVisible():
+                item_text = item.toPlainText()
+                if query_lower in item_text.lower():
+                    item_scene_rect = item.sceneBoundingRect()
+                    scene_rect = QRectF(item_scene_rect.x() - pad_x, item_scene_rect.y() - pad_y,
+                                        item_scene_rect.width() + 2 * pad_x, item_scene_rect.height() + 2 * pad_y)
+                    page_info = self.get_page_for_y(scene_rect.top())
+                    p_num = page_info['page_num'] if page_info else 0
+
+                    highlight_item = SearchHighlightItem(scene_rect, is_active=False)
+                    self.scene.addItem(highlight_item)
+                    self.search_highlight_items.append(highlight_item)
+                    self.search_matches.append({
+                        'page_num': p_num,
+                        'scene_rect': scene_rect,
+                        'item': highlight_item
+                    })
+
+        total = len(self.search_matches)
+        if total == 0:
+            self.lbl_search_count.setText("0 / 0")
+            self.lbl_search_count.setStyleSheet("color: #e06c75; font-weight: bold; margin-left: 4px; margin-right: 4px;")
+            self.btn_search_prev.setEnabled(False)
+            self.btn_search_next.setEnabled(False)
+            return
+
+        # Sort matches in natural reading order: page, then top-to-bottom, left-to-right
+        self.search_matches.sort(key=lambda m: (m['page_num'], m['scene_rect'].top(), m['scene_rect'].left()))
+
+        # Determine best match near current viewport
+        view_top = self.view.mapToScene(0, 0).y()
+        best_idx = 0
+        for idx, m in enumerate(self.search_matches):
+            if m['scene_rect'].bottom() >= view_top:
+                best_idx = idx
+                break
+
+        self.current_search_index = best_idx
+        self.update_search_active_match()
+
+    def update_search_active_match(self):
+        total = len(self.search_matches)
+        if total == 0 or self.current_search_index < 0:
+            self.lbl_search_count.setText("0 / 0")
+            self.lbl_search_count.setStyleSheet("color: #888888; font-weight: bold; margin-left: 4px; margin-right: 4px;")
+            self.btn_search_prev.setEnabled(False)
+            self.btn_search_next.setEnabled(False)
+            return
+
+        self.btn_search_prev.setEnabled(True)
+        self.btn_search_next.setEnabled(True)
+        self.lbl_search_count.setText(f"{self.current_search_index + 1} / {total}")
+        self.lbl_search_count.setStyleSheet("color: #61afef; font-weight: bold; margin-left: 4px; margin-right: 4px;")
+
+        for i, match in enumerate(self.search_matches):
+            match['item'].set_active(i == self.current_search_index)
+
+        # Center on active match in the view
+        active_match = self.search_matches[self.current_search_index]
+        self.view.centerOn(active_match['scene_rect'].center())
+
+    def search_next(self):
+        if not self.search_matches:
+            return
+        self.current_search_index = (self.current_search_index + 1) % len(self.search_matches)
+        self.update_search_active_match()
+
+    def search_prev(self):
+        if not self.search_matches:
+            return
+        self.current_search_index = (self.current_search_index - 1) % len(self.search_matches)
+        self.update_search_active_match()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
